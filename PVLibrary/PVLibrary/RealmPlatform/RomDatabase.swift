@@ -73,9 +73,12 @@ public final class RealmConfiguration {
         }
 
         let migrationBlock: MigrationBlock = { migration, oldSchemaVersion in
+            if oldSchemaVersion < schemaVersion {
+                NotificationCenter.default.post(name: NSNotification.Name.DatabaseMigrationStarted, object: nil)
+            }
+            
             if oldSchemaVersion < 2 {
                 ILOG("Migrating to version 2. Adding MD5s")
-                NotificationCenter.default.post(name: NSNotification.Name.DatabaseMigrationStarted, object: nil)
 
                 var counter = 0
                 var deletions = 0
@@ -114,8 +117,24 @@ public final class RealmConfiguration {
                     newObject!["importDate"] = Date()
                 }
 
-                NotificationCenter.default.post(name: NSNotification.Name.DatabaseMigrationFinished, object: nil)
                 ILOG("Migration complete of \(counter) roms. Removed \(deletions) bad entries.")
+            }
+
+            if oldSchemaVersion < 9 {
+                ILOG("Migrating to version 9. Adding support for quicksaves.")
+
+                var counter = 0
+                migration.enumerateObjects(ofType: PVSaveState.className()) { oldObject, newObject in
+                    counter += 1
+                    let isAutosave = oldObject!["isAutosave"] as! Bool
+                    newObject!["saveTypeRawValue"] = isAutosave ? SaveType.auto.rawValue : SaveType.manual.rawValue
+                }
+
+                ILOG("Migration complete of \(counter) save states.")
+            }
+            
+            if oldSchemaVersion < schemaVersion {
+                NotificationCenter.default.post(name: NSNotification.Name.DatabaseMigrationFinished, object: nil)
             }
         }
 

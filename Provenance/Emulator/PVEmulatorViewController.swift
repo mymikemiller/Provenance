@@ -76,6 +76,7 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
     var batterySavesPath: URL { return PVEmulatorConfiguration.batterySavesPath(forGame: game) }
     var BIOSPath: URL { return PVEmulatorConfiguration.biosPath(forGame: game) }
     var menuButton: MenuButton?
+    var quicksaveButton: MenuButton?
 
     private(set) lazy var glViewController: PVGLViewController = PVGLViewController(emulatorCore: core)
     private(set) lazy var controllerViewController: (UIViewController & StartSelectDelegate)? = PVCoreFactory.controllerViewController(forSystem: game.system, core: core)
@@ -175,7 +176,7 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
             view.removeGestureRecognizer(menuGestureRecognizer)
         }
     }
-
+    
     private func initNotifcationObservers() {
         NotificationCenter.default.addObserver(self, selector: #selector(PVEmulatorViewController.appWillEnterForeground(_:)), name: UIApplication.willEnterForegroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(PVEmulatorViewController.appDidEnterBackground(_:)), name: UIApplication.didEnterBackgroundNotification, object: nil)
@@ -187,7 +188,7 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
         NotificationCenter.default.addObserver(self, selector: #selector(PVEmulatorViewController.screenDidDisconnect(_:)), name: UIScreen.didDisconnectNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(PVEmulatorViewController.handleControllerManagerControllerReassigned(_:)), name: .PVControllerManagerControllerReassigned, object: nil)
     }
-
+    
     private func initCore() {
         core.audioDelegate = self
         core.saveStatesPath = saveStatePath.path
@@ -202,7 +203,7 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
         core.romMD5 = md5Hash
         core.romSerial = game.romSerial
     }
-
+    
     private func initMenuButton() {
         //        controllerViewController = PVCoreFactory.controllerViewController(forSystem: game.system, core: core)
         if let aController = controllerViewController {
@@ -230,6 +231,30 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
         menuButton?.alpha = alpha
         menuButton?.addTarget(self, action: #selector(PVEmulatorViewController.showMenu(_:)), for: .touchUpInside)
         view.addSubview(menuButton!)
+    }
+    
+    private func initQuicksaveButton() {
+        let alpha: CGFloat = CGFloat(PVSettingsModel.shared.controllerOpacity)
+        quicksaveButton = MenuButton(type: .custom)
+        quicksaveButton?.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleBottomMargin]
+        quicksaveButton?.setImage(UIImage(named: "button-save"), for: .normal)
+        quicksaveButton?.setImage(UIImage(named: "button-save-pressed"), for: .highlighted)
+        quicksaveButton?.layer.shadowOffset = CGSize(width: 0, height: 1)
+        quicksaveButton?.layer.shadowRadius = 3.0
+        quicksaveButton?.layer.shadowColor = UIColor.black.cgColor
+        quicksaveButton?.layer.shadowOpacity = 0.75
+        quicksaveButton?.tintColor = UIColor.white
+        quicksaveButton?.alpha = alpha
+        quicksaveButton?.addTarget(self, action: #selector(PVEmulatorViewController.quicksave(_:)), for: .touchUpInside)
+        let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(PVEmulatorViewController.quicksaveButtonLongPress))
+        quicksaveButton?.addGestureRecognizer(longPressRecognizer)
+        view.addSubview(quicksaveButton!)
+    }
+
+    @objc private func quicksaveButtonLongPress(gesture: UILongPressGestureRecognizer) {
+        if gesture.state == UIGestureRecognizer.State.began {
+            self.quickload(gesture)
+        }
     }
 
     private func initFPSLabel() {
@@ -324,9 +349,10 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
             }
             glViewController.didMove(toParent: self)
         }
-        #if os(iOS)
+		#if os(iOS)
             initMenuButton()
-        #endif
+            initQuicksaveButton()
+		#endif
 
         if PVSettingsModel.shared.showFPSCount {
             initFPSLabel()
@@ -335,6 +361,7 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
         #if !targetEnvironment(simulator)
             if !GCController.controllers().isEmpty {
                 menuButton?.isHidden = true
+                quicksaveButton?.isHidden = true
             }
         #endif
 
@@ -455,11 +482,14 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        #if os(iOS)
-            layoutMenuButton()
-        #endif
+    #if os(iOS)
+        layoutMenuButton()
+        
+        if PVSettingsModel.shared.showQuicksaveButton {
+            layoutQuicksaveButton()
+        }
+    #endif
     }
-
     #if os(iOS)
         func layoutMenuButton() {
             if let menuButton = self.menuButton {
@@ -468,6 +498,15 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
                 menuButton.imageView?.contentMode = .center
                 let frame = CGRect(x: safeAreaInsets.left + 10, y: safeAreaInsets.top + 5, width: width, height: height)
                 menuButton.frame = frame
+            }
+        }
+        func layoutQuicksaveButton() {
+            if let quicksaveButton = self.quicksaveButton {
+                let height: CGFloat = 42
+                let width: CGFloat = 42
+                quicksaveButton.imageView?.contentMode = .center
+                let frame = CGRect(x: self.view.frame.size.width - safeAreaInsets.right - width, y: safeAreaInsets.top + 5, width: width, height: height)
+                quicksaveButton.frame = frame
             }
         }
     #endif
