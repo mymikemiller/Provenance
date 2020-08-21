@@ -513,14 +513,16 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
             }
         }
         gameAudio.pause()
-        showMenu(self)
+//        showMenu(self)
+        glViewController.isPaused = true
+        core.setPauseEmulation(true)
     }
 
     @objc func appDidBecomeActive(_: Notification?) {
-        if !isShowingMenu {
-            core.setPauseEmulation(false)
-        }
-        core.setPauseEmulation(true)
+//        if !isShowingMenu {
+//            core.setPauseEmulation(false)
+//        }
+        core.setPauseEmulation(false)
         gameAudio.start()
     }
 
