@@ -285,7 +285,6 @@ final class PVEmulatorViewController: PVEmulatorViewControllerRootClass, PVAudio
     override func viewDidLoad() {
         super.viewDidLoad()
         title = game.title
-        view.backgroundColor = UIColor.black
 
         initNotifcationObservers()
         initCore()

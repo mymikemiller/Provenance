@@ -212,4 +212,27 @@ extension PVEmulatorViewController {
             PVControllerManager.shared.iCadeController?.refreshListener()
         })
     }
+    
+    @objc func quicksave(_ sender: Any?) {
+        self.core.setPauseEmulation(true)
+        
+        let image = self.captureScreenshot()
+        self.createNewSaveState(type: .quick, screenshot: image) { result in
+            switch result {
+            case .success: break
+            case .error(let error):
+                ELOG("Quicksave failed to make save state: \(error.localizedDescription)")
+            }
+            
+            self.core.setPauseEmulation(false)
+        }
+    }
+    
+    @objc func quickload(_ sender: Any?) {
+        guard let saveState = game.newestQuickSave else {
+            return
+        }
+        
+        loadSaveState(saveState)
+    }
 }

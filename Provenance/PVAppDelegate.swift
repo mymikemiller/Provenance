@@ -4,7 +4,6 @@
 //  Created by James Addyman on 07/08/2013.
 //  Copyright (c) 2013 James Addyman. All rights reserved.
 //
-
 let TEST_THEMES = false
 import CocoaLumberjackSwift
 import CoreSpotlight
@@ -60,6 +59,44 @@ final class PVAppDelegate: UIResponder, UIApplicationDelegate {
         let gameLibrary = PVGameLibrary(database: RomDatabase.sharedInstance)
 
         #if os(iOS)
+            // Setup shortcuts
+            Observable.combineLatest(
+                gameLibrary.favorites.mapMany { $0.asShortcut(isFavorite: true) },
+                gameLibrary.recents.mapMany { $0.game.asShortcut(isFavorite: false) }
+            ) { $0 + $1 }
+                .bind(onNext: { shortcuts in
+                    application.shortcutItems = shortcuts
+                })
+                .disposed(by: disposeBag)
+
+            // Handle if started from shortcut
+            if let shortcut = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem, shortcut.type == "kRecentGameShortcut", let md5Value = shortcut.userInfo?["PVGameHash"] as? String, let matchedGame = ((try? Realm().object(ofType: PVGame.self, forPrimaryKey: md5Value)) as PVGame??) {
+                shortcutItemGame = matchedGame
+            }
+        #endif
+
+        #if os(tvOS)
+            if let tabBarController = window?.rootViewController as? UITabBarController {
+                let searchNavigationController = PVSearchViewController.createEmbeddedInNavigationController(gameLibrary: gameLibrary)
+
+                var viewControllers = tabBarController.viewControllers!
+                viewControllers.insert(searchNavigationController, at: 1)
+                tabBarController.viewControllers = viewControllers
+            }
+        #else
+//        let currentTheme = PVSettingsModel.shared.theme
+//        Theme.currentTheme = currentTheme.theme
+            Theme.currentTheme = Theme.darkTheme
+        #endif
+
+        // Setup importing/updating library
+        let gameImporter = GameImporter.shared
+        let libraryUpdatesController = PVGameLibraryUpdatesController(gameImporter: gameImporter)
+        #if os(iOS)
+            libraryUpdatesController.addImportedGames(to: CSSearchableIndex.default(), database: RomDatabase.sharedInstance).disposed(by: disposeBag)
+        #endif
+
+        #if os(iOS)
         let rootNavigation = window!.rootViewController as! UINavigationController
         #else
         let tabBarController = window!.rootViewController as! UITabBarController
@@ -69,49 +106,10 @@ final class PVAppDelegate: UIResponder, UIApplicationDelegate {
         #endif
         let gameLibraryViewController = rootNavigation.viewControllers[0] as! PVGameLibraryViewController
 
-        gameLibraryViewController.gameLibrary = gameLibrary
-
-                #if os(iOS)
-                    // Setup shortcuts
-                    Observable.combineLatest(
-                        gameLibrary.favorites.mapMany { $0.asShortcut(isFavorite: true) },
-                        gameLibrary.recents.mapMany { $0.game.asShortcut(isFavorite: false) }
-                    ) { $0 + $1 }
-                        .bind(onNext: { shortcuts in
-                            application.shortcutItems = shortcuts
-                        })
-                        .disposed(by: disposeBag)
-
-                    // Handle if started from shortcut
-                    if let shortcut = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem, shortcut.type == "kRecentGameShortcut", let md5Value = shortcut.userInfo?["PVGameHash"] as? String, let matchedGame = ((try? Realm().object(ofType: PVGame.self, forPrimaryKey: md5Value)) as PVGame??) {
-                        shortcutItemGame = matchedGame
-                    }
-                #endif
-
-                #if os(tvOS)
-                    if let tabBarController = window?.rootViewController as? UITabBarController {
-                        let searchNavigationController = PVSearchViewController.createEmbeddedInNavigationController(gameLibrary: gameLibrary)
-
-                        var viewControllers = tabBarController.viewControllers!
-                        viewControllers.insert(searchNavigationController, at: 1)
-                        tabBarController.viewControllers = viewControllers
-                    }
-                #else
-        //        let currentTheme = PVSettingsModel.shared.theme
-        //        Theme.currentTheme = currentTheme.theme
-                    Theme.currentTheme = Theme.darkTheme
-                #endif
-
-                // Setup importing/updating library
-                let gameImporter = GameImporter.shared
-                let libraryUpdatesController = PVGameLibraryUpdatesController(gameImporter: gameImporter)
-                #if os(iOS)
-                    libraryUpdatesController.addImportedGames(to: CSSearchableIndex.default(), database: RomDatabase.sharedInstance).disposed(by: disposeBag)
-                #endif
-        
         // Would be nice to inject this in a better way, so that we can be certain that it's present at viewDidLoad for PVGameLibraryViewController, but this works for now
         gameLibraryViewController.updatesController = libraryUpdatesController
         gameLibraryViewController.gameImporter = gameImporter
+        gameLibraryViewController.gameLibrary = gameLibrary
 
         startOptionalWebDavServer()
 
@@ -254,7 +252,6 @@ final class PVAppDelegate: UIResponder, UIApplicationDelegate {
     func applicationWillTerminate(_: UIApplication) {}
 
     // MARK: - Helpers
-
     func isWebDavServerEnviromentVariableSet() -> Bool {
         // Start optional always on WebDav server using enviroment variable
         // See XCode run scheme enviroment varialbes settings.
